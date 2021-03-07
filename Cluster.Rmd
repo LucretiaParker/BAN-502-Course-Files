@@ -1,0 +1,158 @@
+---
+title: "K Means Clustering"
+output: word_document
+---
+  
+```{r, include = FALSE}
+library(tidyverse)
+library(tidymodels)
+
+#library(cluster) #algorithms for clustering
+#library(factoextra) #visualization
+```
+
+
+```{r}
+trucks=read_csv('trucks.csv')
+
+```
+
+
+Relationship between Distance and Speeding
+```{r}
+ggplot(trucks, aes(x=Speeding,y= Distance)) + geom_point() 
+
+```
+
+We see that above scatter plot shows at least two natual clusters.
+
+
+
+```{r}
+kmeans_recipe = recipe(~ Distance + Speeding, trucks) 
+trucks_dummy = kmeans_recipe  %>%
+  step_scale(all_numeric()) %>%
+  step_center(all_numeric()) 
+
+trucks_dummy = prep(trucks_dummy,trucks) #prepares the recipe
+
+trucks_cleaned = bake(trucks_dummy,trucks) 
+summary(trucks_cleaned)
+
+```
+
+```{r}
+set.seed(64)
+clusts = 
+  tibble(k = 2) %>%
+  mutate(
+    kclust = map(k, ~kmeans(trucks_cleaned, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, trucks_cleaned)
+  )
+
+clusts
+```
+
+```{r}
+clusters = 
+  clusts %>%
+  unnest(cols = c(tidied))
+
+assignments = 
+  clusts %>% 
+  unnest(cols = c(augmented))
+
+clusterings = 
+  clusts %>%
+  unnest(cols = c(glanced))
+```
+
+```{r}
+p1 = 
+  ggplot(assignments, aes(x = Speeding, y = Distance)) +
+  geom_point(aes(color = .cluster), alpha = 0.8) + 
+  facet_wrap(~ k)
+p1
+```
+
+We see that two clusters are at a very distant from each other however have too much spread within and hence we should look for more number of clusters.
+
+
+```{r}
+set.seed(412)
+clusts = 
+  tibble(k = 1:8) %>%
+  mutate(
+    kclust = map(k, ~kmeans(trucks_cleaned, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, trucks_cleaned)
+  )
+
+clusters = 
+  clusts %>%
+  unnest(cols = c(tidied))
+
+assignments = 
+  clusts %>% 
+  unnest(cols = c(augmented))
+
+clusterings = 
+  clusts %>%
+  unnest(cols = c(glanced))
+
+p1 = 
+  ggplot(assignments, aes(x = Speeding, y = Distance)) +
+  geom_point(aes(color = .cluster), alpha = 0.8) + 
+  facet_wrap(~ k)
+p1
+```
+
+From above plot, k = 4 looks more appropriate ensuring clear distinction between clusters.
+
+
+
+```{r}
+ggplot(clusterings, aes(k, tot.withinss)) +
+  geom_line() +
+  geom_point()
+```
+
+
+In above graph, we see that SS reduction is insignificant after k =4 hence that would be approriate value.
+
+
+
+```{r}
+set.seed(64)
+clusts = 
+  tibble(k = 4) %>%
+  mutate(
+    kclust = map(k, ~kmeans(trucks_cleaned, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, trucks_cleaned)
+  )
+
+clusters = 
+  clusts %>%
+  unnest(cols = c(tidied))
+
+assignments = 
+  clusts %>% 
+  unnest(cols = c(augmented))
+
+clusterings = 
+  clusts %>%
+  unnest(cols = c(glanced))
+
+p1 = 
+  ggplot(assignments, aes(x = Speeding, y = Distance)) +
+  geom_point(aes(color = .cluster), alpha = 0.8) + 
+  facet_wrap(~ k)
+p1
+```
+
+Now we see 4 different clusters which looks to have centroid at a significance distance from each other and at least 3 clusters are moderately or highly densed ensuring lower within SS.
